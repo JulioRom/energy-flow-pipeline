@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: postgres_container
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: energy_data
+    ports:
+      - "5432:5432"
+    networks:
+      - airflow_network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+  airflow:
+    image: apache/airflow:2.6.0
+    container_name: airflow_webserver
+    env_file:
+      - .env  # Cargar variables de entorno desde el archivo .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW_UID: 50000
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    networks:
+      - airflow_network
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
+      airflow webserver"
+  
+  airflow-scheduler:
+    image: apache/airflow:2.6.0
+    container_name: airflow_scheduler
+    env_file:
+      - .env  # Cargar variables de entorno desde el archivo .env
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    networks:
+      - airflow_network
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    command: scheduler
+
+networks:
+  airflow_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
